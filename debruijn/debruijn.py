@@ -102,8 +102,17 @@ def read_fastq(fastq_file: Path) -> Iterator[str]:
     :param fastq_file: (Path) Path to the fastq file.
     :return: A generator object that iterate the read sequences.
     """
-    pass
-
+    with open(fastq_file, "r") as fr:
+        file_iter = iter(fr)
+        while True:
+            try:
+                next(file_iter)
+                sequence = next(file_iter).strip() 
+                next(file_iter)
+                next(file_iter)
+                yield sequence
+            except:
+                return
 
 def cut_kmer(read: str, kmer_size: int) -> Iterator[str]:
     """Cut read into kmers of size kmer_size.
@@ -111,7 +120,8 @@ def cut_kmer(read: str, kmer_size: int) -> Iterator[str]:
     :param read: (str) Sequence of a read.
     :return: A generator object that provides the kmers (str) of size kmer_size.
     """
-    pass
+    for i in range(len(read)-kmer_size+1):
+        yield read[i:i+kmer_size]
 
 
 def build_kmer_dict(fastq_file: Path, kmer_size: int) -> Dict[str, int]:
@@ -120,8 +130,11 @@ def build_kmer_dict(fastq_file: Path, kmer_size: int) -> Dict[str, int]:
     :param fastq_file: (str) Path to the fastq file.
     :return: A dictionnary object that identify all kmer occurrences.
     """
-    pass
-
+    kmer_dict = {}
+    for reads in read_fastq(fastq_file):
+        for kmer in cut_kmer(reads, kmer_size):
+                kmer_dict[kmer] = kmer_dict.get(kmer, 0)+1
+    return kmer_dict
 
 def build_graph(kmer_dict: Dict[str, int]) -> DiGraph:
     """Build the debruijn graph
@@ -129,7 +142,10 @@ def build_graph(kmer_dict: Dict[str, int]) -> DiGraph:
     :param kmer_dict: A dictionnary object that identify all kmer occurrences.
     :return: A directed graph (nx) of all kmer substring and weight (occurrence).
     """
-    pass
+    graph = DiGraph()
+    for kmer, weight in kmer_dict.items():
+        graph.add_edge(kmer[:-1], kmer[1:], weight=weight)
+    return graph
 
 
 def remove_paths(
@@ -229,7 +245,11 @@ def get_starting_nodes(graph: DiGraph) -> List[str]:
     :param graph: (nx.DiGraph) A directed graph object
     :return: (list) A list of all nodes without predecessors
     """
-    pass
+    list_starting_nodes = []
+    for node in graph.nodes():
+        if len(list(graph.predecessors(node))) == 0:
+            list_starting_nodes.append(node)
+    return list_starting_nodes
 
 
 def get_sink_nodes(graph: DiGraph) -> List[str]:
@@ -238,7 +258,11 @@ def get_sink_nodes(graph: DiGraph) -> List[str]:
     :param graph: (nx.DiGraph) A directed graph object
     :return: (list) A list of all nodes without successors
     """
-    pass
+    list_ending_nodes = []
+    for node in graph.nodes():
+        if len(list(graph.successors(node))) == 0:
+            list_ending_nodes.append(node)
+    return list_ending_nodes
 
 
 def get_contigs(
@@ -251,7 +275,16 @@ def get_contigs(
     :param ending_nodes: (list) A list of nodes without successors
     :return: (list) List of [contiguous sequence and their length]
     """
-    pass
+    list_contigs = []
+    for node_start in starting_nodes:
+        for node_end in ending_nodes:
+            if has_path(graph, node_start, node_end):
+                for a_path in all_simple_paths(graph, node_start, node_end):
+                    contig_i = a_path[0]
+                    for node in a_path[1:]:
+                        contig_i += node[-1]
+                    list_contigs.append([contig_i, len(contig_i)])
+    return list_contigs
 
 
 def save_contigs(contigs_list: List[str], output_file: Path) -> None:
@@ -260,7 +293,11 @@ def save_contigs(contigs_list: List[str], output_file: Path) -> None:
     :param contig_list: (list) List of [contiguous sequence and their length]
     :param output_file: (Path) Path to the output file
     """
-    pass
+    with open(output_file, "w") as fw:
+        for counter, each_contig_info in enumerate(contigs_list):
+            fw.write(f">contig_{str(counter)} len={str(each_contig_info[1])}\n")
+            for i in range(0, each_contig_info[1], 80):
+                fw.write(f"{each_contig_info[0][i:i+80]}\n")
 
 
 def draw_graph(graph: DiGraph, graphimg_file: Path) -> None:  # pragma: no cover
@@ -296,14 +333,21 @@ def main() -> None:  # pragma: no cover
     """
     # Get arguments
     args = get_arguments()
+    dict_file_kmer = build_kmer_dict(args.fastq_file, kmer_size=3)
+    graph = build_graph(dict_file_kmer)
+    starting_nodes = get_starting_nodes(graph)
+    ending_nodes = get_sink_nodes(graph)
+    list_contigs_from_fastq = get_contigs(graph, starting_nodes, ending_nodes)
+    save_contigs(list_contigs_from_fastq, f"results/{args.fastq_file.stem}.fna")
 
     # Fonctions de dessin du graphe
     # A decommenter si vous souhaitez visualiser un petit
     # graphe
     # Plot the graph
-    # if args.graphimg_file:
-    #     draw_graph(graph, args.graphimg_file)
+    #if args.graphimg_file:
+        #draw_graph(graph, args.graphimg_file)
 
 
 if __name__ == "__main__":  # pragma: no cover
     main()
+    
