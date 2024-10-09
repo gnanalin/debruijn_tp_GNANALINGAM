@@ -39,13 +39,13 @@ from typing import Iterator, Dict, List
 
 matplotlib.use("Agg")
 
-__author__ = "Your Name"
-__copyright__ = "Universite Paris Diderot"
-__credits__ = ["Your Name"]
+__author__ = "Stéphanie Gnanalingam"
+__copyright__ = "Universite Paris Cité"
+__credits__ = ["Stéphanie Gnanalingam"]
 __license__ = "GPL"
 __version__ = "1.0.0"
-__maintainer__ = "Your Name"
-__email__ = "your@email.fr"
+__maintainer__ = "Stéphanie Gnanalingam"
+__email__ = "stephanie.gnanalingam@etu.u-paris.fr"
 __status__ = "Developpement"
 
 
@@ -102,12 +102,12 @@ def read_fastq(fastq_file: Path) -> Iterator[str]:
     :param fastq_file: (Path) Path to the fastq file.
     :return: A generator object that iterate the read sequences.
     """
-    with open(fastq_file, "r") as fr:
-        file_iter = iter(fr)
+    with open(fastq_file, "r") as file_read:
+        file_iter = iter(file_read)
         while True:
             try:
                 next(file_iter)
-                sequence = next(file_iter).strip() 
+                sequence = next(file_iter).strip()
                 next(file_iter)
                 next(file_iter)
                 yield sequence
@@ -133,7 +133,7 @@ def build_kmer_dict(fastq_file: Path, kmer_size: int) -> Dict[str, int]:
     kmer_dict = {}
     for reads in read_fastq(fastq_file):
         for kmer in cut_kmer(reads, kmer_size):
-                kmer_dict[kmer] = kmer_dict.get(kmer, 0)+1
+            kmer_dict[kmer] = kmer_dict.get(kmer, 0)+1
     return kmer_dict
 
 def build_graph(kmer_dict: Dict[str, int]) -> DiGraph:
@@ -163,8 +163,19 @@ def remove_paths(
     :param delete_sink_node: (boolean) True->We remove the last node of a path
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
-
+    for path in path_list:
+        if delete_entry_node is True and delete_sink_node is True:
+                graph.remove_nodes_from(path)
+        elif delete_entry_node is True:
+            for node in path[:-1]:
+                graph.remove_node(node)
+        elif delete_sink_node is True:
+            for node in path[1:]:
+                graph.remove_node(node)
+        elif delete_entry_node is False and delete_sink_node is False:
+            for node in path[1:-1]:
+                graph.remove_node(node)
+    return graph
 
 def select_best_path(
     graph: DiGraph,
@@ -184,8 +195,17 @@ def select_best_path(
     :param delete_sink_node: (boolean) True->We remove the last node of a path
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
-
+    if statistics.stdev(weight_avg_list) > 0:
+        best_path_index = weight_avg_list.index(max(weight_avg_list))
+    else:
+        std_lengths = statistics.stdev(path_length)
+        if std_lengths > 0:
+            best_path_index = path_length.index(max(path_length))
+        elif std_lengths == 0:
+            best_path_index = random.randint(0, len(path_length)-1)
+    paths_to_remove = [path for i, path in enumerate(path_list) if i != best_path_index]
+    graph = remove_paths(graph, paths_to_remove, delete_entry_node, delete_sink_node)
+    return graph
 
 def path_average_weight(graph: DiGraph, path: List[str]) -> float:
     """Compute the weight of a path
@@ -207,8 +227,10 @@ def solve_bubble(graph: DiGraph, ancestor_node: str, descendant_node: str) -> Di
     :param descendant_node: (str) A downstream node in the graph
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
-
+    path_list = list(all_simple_paths(graph, ancestor_node, descendant_node))
+    weight_avg_list = [path_average_weight(graph, a_path) for a_path in path_list]
+    path_length = [len(a_path) for a_path in path_list]
+    return select_best_path(graph, path_list, path_length, weight_avg_list)
 
 def simplify_bubbles(graph: DiGraph) -> DiGraph:
     """Detect and explode bubbles
@@ -216,7 +238,21 @@ def simplify_bubbles(graph: DiGraph) -> DiGraph:
     :param graph: (nx.DiGraph) A directed graph object
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+    bubble = False
+    for node in graph.nodes():
+        list_predecessors = list(graph.predecessors(node))
+        if len(list_predecessors) > 1:
+            for i in range(len(list_predecessors)):
+                for j in range(i+1, len(list_predecessors)):
+                    ancestor_node = lowest_common_ancestor(graph, list_predecessors[i], list_predecessors[j])
+                    if ancestor_node != None:
+                        bubble = True
+                        break
+        if bubble == True:
+            break
+    if bubble:
+        graph = simplify_bubbles(solve_bubble(graph, ancestor_node, node))
+    return graph
 
 
 def solve_entry_tips(graph: DiGraph, starting_nodes: List[str]) -> DiGraph:
@@ -350,4 +386,4 @@ def main() -> None:  # pragma: no cover
 
 if __name__ == "__main__":  # pragma: no cover
     main()
-    
+
