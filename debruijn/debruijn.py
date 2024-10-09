@@ -26,6 +26,7 @@ from networkx import (
     draw,
     spring_layout,
 )
+import networkx as nx
 import matplotlib
 from operator import itemgetter
 import random
@@ -248,7 +249,7 @@ def simplify_bubbles(graph: DiGraph) -> DiGraph:
                     if ancestor_node != None:
                         bubble = True
                         break
-        if bubble == True:
+        if bubble is True:
             break
     if bubble:
         graph = simplify_bubbles(solve_bubble(graph, ancestor_node, node))
@@ -262,7 +263,26 @@ def solve_entry_tips(graph: DiGraph, starting_nodes: List[str]) -> DiGraph:
     :param starting_nodes: (list) A list of starting nodes
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+    point = False
+    for node in graph.nodes():
+        if node not in starting_nodes:
+            predecessors = list(graph.predecessors(node))
+            if len(predecessors) > 1:
+                path_list = []
+                for start_node in starting_nodes:
+                    if has_path(graph, start_node, node):
+                        path_list += list(all_simple_paths(graph, start_node, node))
+                point = True
+            if point is True:
+                break
+    if point is True and len(path_list) > 1:
+        weight_avg_list = [path_average_weight(graph, a_path) for a_path in path_list]
+        path_length = [len(a_path) for a_path in path_list]
+        graph = select_best_path(graph, path_list, path_length, weight_avg_list, delete_entry_node=True,
+                        delete_sink_node=False)
+        new_starting_point = get_starting_nodes(graph)
+        graph = solve_entry_tips(graph, new_starting_point)
+    return graph
 
 
 def solve_out_tips(graph: DiGraph, ending_nodes: List[str]) -> DiGraph:
@@ -272,7 +292,26 @@ def solve_out_tips(graph: DiGraph, ending_nodes: List[str]) -> DiGraph:
     :param ending_nodes: (list) A list of ending nodes
     :return: (nx.DiGraph) A directed graph object
     """
-    pass
+    point = False
+    for node in graph.nodes():
+        if node not in ending_nodes:
+            successors = list(graph.successors(node))
+            if len(successors) > 1:
+                path_list = []
+                for end_node in ending_nodes:
+                    if has_path(graph, node, end_node):
+                        path_list += list(all_simple_paths(graph, node, end_node))
+                point = True
+            if point is True:
+                break
+    if point is True and len(path_list) > 1:
+        weight_avg_list = [path_average_weight(graph, a_path) for a_path in path_list]
+        path_length = [len(a_path) for a_path in path_list]
+        graph = select_best_path(graph, path_list, path_length, weight_avg_list, delete_entry_node=False,
+                        delete_sink_node=True)
+        new_ending_nodes = get_sink_nodes(graph)
+        graph = solve_out_tips(graph, new_ending_nodes)
+    return graph
 
 
 def get_starting_nodes(graph: DiGraph) -> List[str]:
@@ -369,19 +408,32 @@ def main() -> None:  # pragma: no cover
     """
     # Get arguments
     args = get_arguments()
-    dict_file_kmer = build_kmer_dict(args.fastq_file, kmer_size=3)
+    
+    dict_file_kmer = build_kmer_dict(args.fastq_file, kmer_size=args.kmer_size)
     graph = build_graph(dict_file_kmer)
     starting_nodes = get_starting_nodes(graph)
     ending_nodes = get_sink_nodes(graph)
+    
+    graph = simplify_bubbles(graph)
+    
+    starting_nodes = get_starting_nodes(graph)
+    graph = solve_entry_tips(graph, starting_nodes)
+    
+    ending_nodes = get_sink_nodes(graph)
+    graph = solve_out_tips(graph, ending_nodes)
+    
+    starting_nodes = get_starting_nodes(graph)
+    ending_nodes = get_sink_nodes(graph)
+    
     list_contigs_from_fastq = get_contigs(graph, starting_nodes, ending_nodes)
-    save_contigs(list_contigs_from_fastq, f"results/{args.fastq_file.stem}.fna")
+    save_contigs(list_contigs_from_fastq, args.output_file)
 
     # Fonctions de dessin du graphe
     # A decommenter si vous souhaitez visualiser un petit
     # graphe
     # Plot the graph
-    #if args.graphimg_file:
-        #draw_graph(graph, args.graphimg_file)
+    if args.graphimg_file:
+        draw_graph(graph, args.graphimg_file)
 
 
 if __name__ == "__main__":  # pragma: no cover

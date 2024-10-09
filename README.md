@@ -38,3 +38,13 @@ Vous vérifierez également la qualité syntaxique de votre programme en exécut
 ## Contact
 
 En cas de questions, vous pouvez me contacter par email: amine.ghozlane[at]pasteur.fr
+
+## Exécution des commandes des dernières questions
+
+    python debruijn/debruijn.py -i data/eva71_plus_perfect.fq  -k 22 -o results/contigs71_plus_perfect.fasta -f plots/graph71_plus_perfect.png
+
+    makeblastdb -in data/eva71.fna -dbtype nucl
+
+    blastn -query results/contigs71_plus_perfect.fasta -db data/eva71.fna -out results/blastn_eva71_results.txt -outfmt "6 qseqid sseqid pident length mismatch gapopen qstart qend sstart send evalue bitscore"
+
+    blastn -query results/contigs71_plus_perfect.fasta -db data/eva71.fna -out results/blastn_ev71_raw_result.txt
